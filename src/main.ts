@@ -16,6 +16,7 @@ interface NodeAutoResizeSettings {
 	trueWidth: boolean;
 	emfactor: string;
 	padding: number;
+	cjkWidthFactor: number;
 }
 
 const DEFAULT_SETTINGS: NodeAutoResizeSettings = {
@@ -24,6 +25,7 @@ const DEFAULT_SETTINGS: NodeAutoResizeSettings = {
 	trueWidth: true,
 	emfactor: "2.0,1.8,1.6,1.4,1.2,1.0",
 	padding: 80,
+	cjkWidthFactor: 1.8,
 };
 
 var trueCharacterWidth: Map<string, number>;
@@ -53,7 +55,10 @@ const updateNodeSize = (plugin: NodeAutoResizePlugin) => {
 							const lineCharacterWidths = Array.from(line).map(
 								(ch) =>
 									trueCharacterWidth.get(ch) ??
-									editorView.defaultCharacterWidth
+									(isCJKCharacter(ch)
+										? editorView.defaultCharacterWidth *
+										  plugin.settings.cjkWidthFactor
+										: editorView.defaultCharacterWidth)
 							);
 							const trueLineLength = lineCharacterWidths.reduce(
 								(acc, curr) => acc + curr,
@@ -187,6 +192,13 @@ function measureCharacterWidths(
 		widthMap.set(char, ctx.measureText(char).width);
 	}
 
+	// 常用中文字符
+	const commonCJKChars =
+		"的一是在不了有和人这中大为上个国我以要他时来用们生到作地于出就分对成会可主发年动同工也能下过子说产种面而方后多定行学法所民得经十三之进着等部度家电力里如水化高自二理起小物现实加量都两体制机当使点从业本去把性好应开它合还因由其些然前外天政四日那社义事平形相全表间样与关各重新线内数正心反你明看原又么利比或但质气第向道命此变条只没结解问意建月公无系军很情者最立代想已通并提直题党程展五果料象员革位入常文总次品式活设及管特件长求老头基资边流路级少图山统接知较将组见计别她手角期根论运农指几九区强放决西被干做必战先回则任取持工反收结风称位入常文总次品式活设及管特件长求老头基资边流路级少图山统接知较将组见计别她手角期根论运农指几九区强放决西被干做必战先回则任取持工体系低持音众书布复容儿须际商非验连断深难近矿千周委素技备半办青省列习响约支般史感劳便团往酸历市克何除消构府称太准精值号率族维划选标写存候毛亲快效斯院查江型眼王按格养易置派层片始却专状育厂京识适属圆包火住调满县局照参红细引听该铁价严龙飞";
+	for (const char of commonCJKChars) {
+		widthMap.set(char, ctx.measureText(char).width);
+	}
+
 	return widthMap;
 }
 
@@ -211,6 +223,23 @@ function getEmFactor(emfactor: string, headerNumber: number): number {
 function countLeadingHashtags(input: string): number {
 	const match = input.trimStart().match(/#+ /); // Match one or more '#' at the start of the string
 	return match ? match[0].length - 1 : 0; // Return the length of the match or 0 if there are none
+}
+
+function isCJKCharacter(char: string): boolean {
+	const code = char.charCodeAt(0);
+	// 中文、日文、韩文的 Unicode 范围
+	return (
+		(code >= 0x4e00 && code <= 0x9fff) || // CJK 统一表意文字
+		(code >= 0x3400 && code <= 0x4dbf) || // CJK 统一表意文字扩展 A
+		(code >= 0xf900 && code <= 0xfaff) || // CJK 兼容表意文字
+		(code >= 0xff00 && code <= 0xffef) || // 全角字符
+		(code >= 0x3040 && code <= 0x309f) || // 日文平假名
+		(code >= 0x30a0 && code <= 0x30ff) || // 日文片假名
+		(code >= 0x3100 && code <= 0x312f) || // 汉语注音符号
+		(code >= 0xac00 && code <= 0xd7af) || // 韩文
+		(code >= 0x2e80 && code <= 0x2eff) || // CJK 部首补充
+		(code >= 0x3000 && code <= 0x303f) // CJK 符号和标点
+	);
 }
 
 class NodeAutoResizeSettingTab extends PluginSettingTab {
@@ -279,6 +308,22 @@ class NodeAutoResizeSettingTab extends PluginSettingTab {
 						.setValue(this.plugin.settings.padding.toString())
 						.onChange(async (value) => {
 							this.plugin.settings.padding = parseInt(value);
+							await this.plugin.saveSettings();
+						})
+				);
+			new Setting(containerEl)
+				.setName("CJK width factor")
+				.setDesc(
+					"Width multiplier for Chinese, Japanese, and Korean characters."
+				)
+				.addText((text) =>
+					text
+						.setValue(
+							this.plugin.settings.cjkWidthFactor.toString()
+						)
+						.onChange(async (value) => {
+							this.plugin.settings.cjkWidthFactor =
+								parseFloat(value);
 							await this.plugin.saveSettings();
 						})
 				);
